@@ -57,10 +57,12 @@ if __name__ == '__main__':
 
     print(f">>> [{unique_id}] run={run_id}, size={data_size}, times={times}")
 
-    # create res directory
-    os.makedirs("res", exist_ok=True)
+    # define a shared results directory (NFS-mounted, accessible from all nodes)
+    res_dir = os.path.expanduser("~/deisa-dask/benchmark/scatter/g5k/res")
+    os.makedirs(res_dir, exist_ok=True)  # Create if it doesn't exist
 
-    # write times to csv file
-    np.savetxt(f"res/scatter_times_{nb_clients}_{data_size}_{run_id}_{unique_id}.csv", times, delimiter=",")
+    # write times to CSV file in the shared directory
+    output_file = os.path.join(res_dir, f"scatter_times_{nb_clients}_{data_size}_{run_id}_{unique_id}.csv")
+    np.savetxt(output_file, times, delimiter=",")
 
     exit(0)

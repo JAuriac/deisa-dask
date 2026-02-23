@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+#set -x
 
 SCHEFILE=~/deisa-dask/benchmark/scatter/g5k/scheduler.json
 DASK_WORKER_NODES=1
