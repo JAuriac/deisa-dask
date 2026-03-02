@@ -45,7 +45,7 @@ for data_size in "${DATA_SIZES[@]}"; do
       for id in $(seq 1 "${nb_clients}"); do
         # scheduler file, nb clients, data size, run_id, unique id
         srun -N 1 -n 1 -r $(($DASK_WORKER_NODES+2)) \
-          python3 ./connect-clients.py $SCHEFILE "${nb_clients}" "${data_size}" "${run_id}" "${id}" &
+#          python3 ./connect-clients.py $SCHEFILE "${nb_clients}" "${data_size}" "${run_id}" "${id}" &
           bash -c "source ~/venv3.14_deisa-dask/bin/activate && python3 ~/deisa-dask/benchmark/scatter/ruche/connect-clients.py $SCHEFILE \"${nb_clients}\" \"${data_size}\" \"${run_id}\" \"${id}\"" &
         pids+=($!)
       done
