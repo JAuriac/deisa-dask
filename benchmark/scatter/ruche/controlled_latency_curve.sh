@@ -36,7 +36,7 @@ NB_RUNS=3
 echo "Launching Scheduler..."
 srun -N 1 -n 1 -c 1 \
 bash -c "source ~/venv3.14_deisa-dask/bin/activate && \
-         dask-scheduler --scheduler-file=$SCHEFILE --no-dashboard" &
+         dask scheduler --scheduler-file=$SCHEFILE --no-dashboard" &
 SCH_PID=$!
 #         dask scheduler --scheduler-file=$SCHEFILE --no-dashboard" &
 
@@ -51,7 +51,7 @@ echo "Scheduler ready."
 echo "Launching Workers..."
 srun -N $DASK_WORKER_NODES -n $DASK_WORKER_NODES -c 40 \
 bash -c "source ~/venv3.14_deisa-dask/bin/activate && \
-         dask-worker --scheduler-file=$SCHEFILE \
+         dask worker --scheduler-file=$SCHEFILE \
          --nworkers ${DASK_NB_WORKERS} \
          --nthreads ${DASK_NB_THREAD_PER_WORKER} \
          --no-dashboard" &
