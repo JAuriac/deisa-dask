@@ -6,6 +6,7 @@
   (list "python"
         "python-numpy"
         "python-dask"
+        "python-deisa-dask"
         "python-distributed"
         "python-bokeh"
         "python-matplotlib"
