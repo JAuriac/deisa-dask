@@ -33,15 +33,16 @@ def main():
     start = time.perf_counter_ns()
 
     future = client.scatter(data, direct=True)
+    future.release()
 
     end = time.perf_counter_ns()
 
     latency_ns = end - start
 
-    os.makedirs("resBurstVariantA", exist_ok=True)
+    os.makedirs("res", exist_ok=True)
 
     out_path = (
-        f"resBurstVariantA/scatter_times_"
+        f"res/scatter_times_"
         f"{size}_{args.data_size}_{args.run_id}_{rank}.csv"
     )
 

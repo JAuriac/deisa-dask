@@ -13,20 +13,21 @@ export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 ulimit -n 200000
 
+module load openmpi/4.1.8/gcc-15.1.0
+
 # -----------------------
 # Configuration
 # -----------------------
 
-SCHEFILE=$PWD/scheduler_latency_variantD.json
+SCHEFILE=$PWD/scheduler_burst_latency.json
 rm -f $SCHEFILE
 
 DASK_WORKER_NODES=1
 DASK_NB_WORKERS=40
 DASK_NB_THREAD_PER_WORKER=1
 
-#DATA_SIZES=(32 64 128)
-DATA_SIZES=(32)
-CLIENTS_LIST=(1 2 4 8 16 32 40 80 120 160 200 240 360 480)
+DATA_SIZES=(1 32 64)
+CLIENTS_LIST=(1 2 5 10 20 40 80 120 160 200 240 360 480)
 NB_RUNS=1
 
 
@@ -70,13 +71,15 @@ for data_size in "${DATA_SIZES[@]}"; do
       echo "Data size: $data_size | Clients: $nb_clients | Run: $run_id"
       echo "========================================"
 
+      # We allocate one node per forty clients, as a node on ruche has forty CPUs.
+      # If less than forty are needed, we round up to use one node.
       NODES_CLIENTS=$(( (nb_clients + 39) / 40 ))
 
       echo "Using $NODES_CLIENTS client nodes"
 
       srun -N ${NODES_CLIENTS} -n ${nb_clients} -c 1 \
         bash -c "source ~/venv3.14_deisa-dask/bin/activate && \
-                 python3 test_latency_curve_mpi_variantD.py \
+                 python3 test_burst_controlled_latency.py \
                      --scheduler-file ${SCHEFILE} \
                      --data-size ${data_size} \
                      --run-id ${run_id}"
