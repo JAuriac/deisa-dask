@@ -9,4 +9,4 @@
 #SBATCH --partition=cpu_short
 
 source ~/venv3.14_deisa-dask/bin/activate
-python3 plot_split_survival_unified_variants.py
+python3 plot_all.py
