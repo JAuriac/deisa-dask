@@ -109,12 +109,12 @@ if __name__ == '__main__':
 
     print(f">>> [{unique_id}] run={run_id}, scatter_type={scatter_type}, size={data_size}, times={times}", flush=True)
 
-    # create res_orig_vs_optim1 directory
-    os.makedirs("res_orig_vs_optim1", exist_ok=True)
+    # create res directory
+    os.makedirs("res", exist_ok=True)
 
     # write times to csv file
     print(f"[{unique_id}] Writing times to CSV file.", flush=True)
-    np.savetxt(f"res_orig_vs_optim1/scatter_times_{nb_clients}_{data_size}_{run_id}_{unique_id}_{scatter_type}.csv",
+    np.savetxt(f"res/scatter_times_{nb_clients}_{data_size}_{run_id}_{unique_id}_{scatter_type}.csv",
                times,
                delimiter=",")
 
