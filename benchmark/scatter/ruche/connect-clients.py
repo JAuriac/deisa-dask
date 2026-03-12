@@ -24,7 +24,7 @@ def disconnect_clients(clients: List[Client]):
 
 def do_scatter(clients, workers) -> List[float]:
     times = []
-    data = np.zeros((data_size, data_size, data_size), dtype=np.float64)
+    data = np.ones((data_size, data_size, data_size), dtype=np.float64)
 
     for i, c in enumerate(clients):
         start = time.time_ns()
