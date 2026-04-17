@@ -44,6 +44,8 @@ from TestSimulator import TestSimulation
 from deisa.dask import Deisa, get_connection_info, Bridge
 from utils import wait_for, dask_array_element_wise_equal
 
+from deisa.dask.types import DeisaArray, DaskArrayData
+
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -224,6 +226,31 @@ class TestUsingDaskCluster:
         assert darr.compute().all() == data.all()
         assert darr.sum().compute() == data.sum()
 
+    def test_deisa_variable(self, env_setup):
+        client, cluster = env_setup
+
+        v = Variable("Test", client=client)
+
+        np.random.seed(42)
+        data = np.random.random((2, 2))
+
+        f = client.scatter(data, direct=True)
+        v.set({'shape': data.shape,
+               'dtype': data.dtype,
+               'f': f,
+               'f_key': f.key})
+
+        res = v.get()
+        assert res['shape'] == data.shape
+        assert res['dtype'] == data.dtype
+
+        darr = da.from_delayed(dask.delayed(res["f"]), res["shape"], dtype=res["dtype"])
+        deisarr = DeisaArray(dask=darr, t=0)
+        assert deisarr.dask.compute().shape == (2, 2)
+        assert deisarr.dask.compute().all() == data.all()
+        assert deisarr.dask.sum().compute() == data.sum()
+        assert deisarr.t == 0
+
     @pytest.mark.parametrize('global_grid_size', [(8, 8), (32, 32), (32, 4), (4, 32)])
     @pytest.mark.parametrize('mpi_parallelism', [(1, 1), (2, 2), (1, 2), (2, 1)])
     @pytest.mark.parametrize('nb_iterations', [1, 2, 5])
@@ -257,6 +284,45 @@ class TestUsingDaskCluster:
 
             assert iteration == i, "iteration does not match expected"
             assert math.isclose(global_data_da.sum().compute(), darr.sum().compute(),
+                                rel_tol=1e-09), "reconstructed dask array does not match original"
+
+    @pytest.mark.parametrize('global_grid_size', [(8, 8)])
+    @pytest.mark.parametrize('mpi_parallelism', [(2, 2)])
+    @pytest.mark.parametrize('nb_iterations', [5])
+    @pytest.mark.parametrize('update_workers', [False, True])
+    # @pytest.mark.parametrize('filter_workers', []) # TODO
+    def test_get_deisa_array(self, global_grid_size: tuple, mpi_parallelism: tuple, nb_iterations: int,
+                            update_workers: bool,
+                            env_setup):
+        print(f"global_grid_size={global_grid_size} mpi_parallelism={mpi_parallelism} nb_iterations={nb_iterations}, "
+              f"update_workers={update_workers}")
+
+        client, cluster = env_setup
+
+        sim = TestSimulation(client,
+                             mpi_parallelism=mpi_parallelism,
+                             arrays_metadata={
+                                 'my_array': {
+                                     'size': global_grid_size,
+                                     'subsize': (global_grid_size[0] // mpi_parallelism[0],
+                                                 global_grid_size[1] // mpi_parallelism[1])
+                                 }
+                             },
+                             wait_for_go=False)
+        deisa = Deisa(get_connection_info=lambda: client)
+        daskArrayData = DaskArrayData('my_array')
+
+        for i in range(nb_iterations):
+            global_data = sim.generate_data('my_array', iteration=i, update_workers=update_workers)
+            global_data_da = da.from_array(global_data, chunks=(global_grid_size[0] // mpi_parallelism[0],
+                                                                global_grid_size[1] // mpi_parallelism[1]))
+            # darr, iteration = deisa.get_array('my_array', iteration=i)
+            deisarr = deisa.get_array('my_array', iteration=i)
+            # deisarr = daskArrayData.get_full_array('my_array')
+            deisarr = daskArrayData.get_full_array(i, distributing_scheduling_enabled=False)
+
+            assert deisarr.t == i, "iteration does not match expected"
+            assert math.isclose(global_data_da.sum().compute(), deisarr.dask.sum().compute(),
                                 rel_tol=1e-09), "reconstructed dask array does not match original"
 
     def test_get_dask_array_slow(self, env_setup):

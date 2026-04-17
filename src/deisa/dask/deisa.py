@@ -42,6 +42,7 @@ from deisa.core.interface import IDeisa, SupportsSlidingWindow
 from distributed import Client, Future, Queue, Variable
 
 from deisa.dask.handshake import Handshake
+from deisa.dask.types import DeisaArray
 
 LOCK_PREFIX: Final[str] = "deisa_lock_"
 VARIABLE_PREFIX: Final[str] = "deisa_variable_"
@@ -148,9 +149,14 @@ class Deisa(IDeisa):
                         darr_chunks,
                         self.arrays_metadata[name]["size"]
                     )
+                    # darr = self._arrays[name].get_full_array(
+                    #     iteration,
+                    #     distributing_scheduling_enabled=self.config.enable_distributed_scheduling
+                    # )
 
                     logger.debug(f"[ITER {iteration}] {name} shape={darr.shape}")
-                    return darr, iteration
+                    # Instead of "return darr, iteration", enables both deisarr and darr+iteration returned values
+                    return DeisaArray(dask=darr, t=iteration)
 
             # timeout handling
             if timeout is not None and (time.time() - start) > timeout:
