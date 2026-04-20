@@ -319,7 +319,7 @@ class TestUsingDaskCluster:
             # darr, iteration = deisa.get_array('my_array', iteration=i)
             deisarr = deisa.get_array('my_array', iteration=i)
             # deisarr = daskArrayData.get_full_array('my_array')
-            deisarr = daskArrayData.get_full_array(i, distributing_scheduling_enabled=False)
+            # deisarr = daskArrayData.get_full_array(i, distributing_scheduling_enabled=False)
 
             assert deisarr.t == i, "iteration does not match expected"
             assert math.isclose(global_data_da.sum().compute(), deisarr.dask.sum().compute(),
