@@ -149,10 +149,6 @@ class Deisa(IDeisa):
                         darr_chunks,
                         self.arrays_metadata[name]["size"]
                     )
-                    # darr = self._arrays[name].get_full_array(
-                    #     iteration,
-                    #     distributing_scheduling_enabled=self.config.enable_distributed_scheduling
-                    # )
 
                     logger.debug(f"[ITER {iteration}] {name} shape={darr.shape}")
                     # Instead of "return darr, iteration", enables both deisarr and darr+iteration returned values

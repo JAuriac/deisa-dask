@@ -44,7 +44,7 @@ from TestSimulator import TestSimulation
 from deisa.dask import Deisa, get_connection_info, Bridge
 from utils import wait_for, dask_array_element_wise_equal
 
-from deisa.dask.types import DeisaArray, DaskArrayData
+from deisa.dask.types import DeisaArray
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -310,16 +310,12 @@ class TestUsingDaskCluster:
                              },
                              wait_for_go=False)
         deisa = Deisa(get_connection_info=lambda: client)
-        daskArrayData = DaskArrayData('my_array')
 
         for i in range(nb_iterations):
             global_data = sim.generate_data('my_array', iteration=i, update_workers=update_workers)
             global_data_da = da.from_array(global_data, chunks=(global_grid_size[0] // mpi_parallelism[0],
                                                                 global_grid_size[1] // mpi_parallelism[1]))
-            # darr, iteration = deisa.get_array('my_array', iteration=i)
             deisarr = deisa.get_array('my_array', iteration=i)
-            # deisarr = daskArrayData.get_full_array('my_array')
-            # deisarr = daskArrayData.get_full_array(i, distributing_scheduling_enabled=False)
 
             assert deisarr.t == i, "iteration does not match expected"
             assert math.isclose(global_data_da.sum().compute(), deisarr.dask.sum().compute(),
