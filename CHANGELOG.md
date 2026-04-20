@@ -25,6 +25,8 @@ Types of changes:
 - Add option to select worker to scatter data to
 - Add `_get_actor` helper function in utils to start a singleton Actor
 - Add `pytest.ini`
+- Add the option to update the worker list, before `send()`, on a Bridge using `update_worker`
+- Add the option to filter the worker list, before `send()`, on a Bridge using `filter_worker`
 
 ### Changed
 
@@ -34,6 +36,7 @@ Types of changes:
 - Move `get_connection_info` to utils
 - set Client `heartbeat_interval` to `sys.maxsize`
 - Change `TestSimulation` to use `asyncio` to run `bridge.send`
+- Gracefully stop bridges. Deisa waits for all bridges to close
 
 ### Fixed
 
