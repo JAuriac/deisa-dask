@@ -163,47 +163,71 @@ class Deisa(IDeisa):
     def __default_exception_handler(callback_id: Callback_id, e):
         logger.error(f"Exception thrown for callback id {callback_id}: {e}")
 
-    def register_sliding_window_callback(self,
-                                         callback: SupportsSlidingWindow.Callback,
-                                         array_name: str, window_size: int = DEFAULT_SLIDING_WINDOW_SIZE,
-                                         exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler) -> Callback_id:
+    def register(
+        self,
+        *args: Union[str, Callback_args],
+        window_size: int = DEFAULT_SLIDING_WINDOW_SIZE,
+        exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
+        when: Literal['AND', 'OR'] = 'AND',
+    ) -> Callable:
         """
-        Register a sliding-window callback for a single array.
-        """
-        parsed = [(array_name, window_size)]
-        return self._register_sliding_window_callbacks_impl(
-            callback,
-            parsed,
-            exception_handler=exception_handler,
-            when='AND')
+        Decorator that registers the decorated function as a sliding-window callback.
 
-    def register_sliding_window_callbacks(self,
-                                          callback: SupportsSlidingWindow.Callback,
-                                          *callback_args: Callback_args,
-                                          exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
-                                          when: Literal['AND', 'OR'] = 'AND') -> Callback_id:
+            @deisa.register('array', window_size=3)
+            def cb(window, timestep): ...
+
+            @deisa.register('a', ('b', 3), when='OR')
+            def cb(window, timestep): ...
+        """
+
+        def decorator(fn: SupportsSlidingWindow.Callback) -> SupportsSlidingWindow.Callback:
+            fn.callback_id = self.register_sliding_window_callback(
+                fn, *args, window_size=window_size,
+                exception_handler=exception_handler, when=when,
+            )
+            return fn
+        return decorator
+
+    def register_sliding_window_callback(
+        self,
+        callback: SupportsSlidingWindow.Callback,
+        *args: Union[str, Callback_args],
+        window_size: int = DEFAULT_SLIDING_WINDOW_SIZE,
+        exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
+        when: Literal['AND', 'OR'] = 'AND',
+    ) -> Callback_id:
         """
         Register a sliding-window callback for one or more arrays.
 
-        Supports:
-          - "array"
-          - ("array", window_size)
-          - mixed forms
+        Args can be plain strings or (name, window_size) tuples, or mixed:
+        - "array"                   uses window_size kwarg as default
+        - ("array", window_size)    explicit per-array window size
+
+        Examples:
+        - Single array:
+            register_sliding_window_callback(cb, 'array', window_size=3)
+        - Multiple arrays, same window size:
+            register_sliding_window_callback(cb, 'a', 'b', window_size=5)
+        - Multiple arrays, per-array window size:
+            register_sliding_window_callback(cb, ('a', 2), ('b', 3))
+        - Mixed, window_size kwarg as fallback for bare strings:
+            register_sliding_window_callback(cb, 'a', ('b', 3), when='OR')
+
         """
-        if not callback_args:
+
+        if not args:
             raise TypeError(
-                "register_sliding_window_callbacks requires at least one array name "
+                "register_sliding_window_callback requires at least one array name "
                 "or (name, window_size) tuple"
             )
 
         parsed: List[Tuple[str, int]] = []
-
-        for arg in callback_args:
+        for arg in args:
             if isinstance(arg, str):
-                parsed.append((arg, DEFAULT_SLIDING_WINDOW_SIZE))
+                parsed.append((arg, window_size))          # kwarg acts as default
             elif isinstance(arg, tuple):
                 if len(arg) == 1:
-                    parsed.append((arg[0], DEFAULT_SLIDING_WINDOW_SIZE))
+                    parsed.append((arg[0], window_size))
                 elif len(arg) == 2:
                     name, ws = arg
                     if not isinstance(name, str) or not isinstance(ws, int):
@@ -212,13 +236,16 @@ class Deisa(IDeisa):
                 else:
                     raise TypeError("tuple must be (str,) or (str, int)")
             else:
-                raise TypeError("callback_args must be str or tuple")
+                raise TypeError("args must be str or tuple")
 
         return self._register_sliding_window_callbacks_impl(
             callback,
             parsed,
             exception_handler=exception_handler,
             when=when)
+
+    def register_sliding_window_callbacks(self, callback, *args, **kwargs):
+        return self.register_sliding_window_callback(callback, *args, **kwargs)
 
     def _register_sliding_window_callbacks_impl(self,
                                                 callback: SupportsSlidingWindow.Callback,
@@ -275,7 +302,8 @@ class Deisa(IDeisa):
 
         return callback_id
 
-    def unregister_sliding_window_callback(self, callback_id: Callback_id) -> None:
+    def unregister_sliding_window_callback(self, target: Union[Callback_id, SupportsSlidingWindow.Callback]) -> None:
+        callback_id = getattr(target, 'callback_id', target)
         cb_data = self._callbacks.pop(callback_id, None)
         if cb_data is None:
             return

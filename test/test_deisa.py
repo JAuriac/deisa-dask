@@ -319,6 +319,7 @@ class TestUsingDaskCluster:
             'counter': 0
         }
 
+        @deisa.register('my_array', window_size=window_size)
         def window_callback(window: list[da.Array], timestep: int):
             print(f"hello from window_callback. iteration={timestep}", flush=True)
             context['counter'] += 1
@@ -326,7 +327,7 @@ class TestUsingDaskCluster:
             context['latest_data'] = window[-1]
             context['latest_window_size'] = len(window)
 
-        deisa.register_sliding_window_callback(window_callback, 'my_array', window_size=window_size)
+        _ = window_callback # registered via decorator, to suppress "not accessed" warning
 
         for i in range(1, nb_iterations + 1):
             print(f"iteration {i}", flush=True)
