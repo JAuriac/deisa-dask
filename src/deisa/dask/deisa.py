@@ -165,7 +165,7 @@ class Deisa(IDeisa):
 
     def register(
         self,
-        *args: Union[str, Callback_args],
+        *args: Callback_args,
         window_size: int = DEFAULT_SLIDING_WINDOW_SIZE,
         exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
         when: Literal['AND', 'OR'] = 'AND',
@@ -191,7 +191,7 @@ class Deisa(IDeisa):
     def register_sliding_window_callback(
         self,
         callback: SupportsSlidingWindow.Callback,
-        *args: Union[str, Callback_args],
+        *args: Callback_args,
         window_size: int = DEFAULT_SLIDING_WINDOW_SIZE,
         exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
         when: Literal['AND', 'OR'] = 'AND',
