@@ -354,7 +354,8 @@ class Deisa(IDeisa):
 
         # update sliding window
         d = state[array_name]
-        d["window"].append(darr)
+        # d["window"].append(darr)
+        d["window"].append(DeisaArray(dask=darr, t=iteration))
         d["changed"] = True
 
         ordered_array_names = cb_data["array_names"]
