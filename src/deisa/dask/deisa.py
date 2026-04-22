@@ -152,7 +152,6 @@ class Deisa(IDeisa):
                     )
 
                     logger.debug(f"[ITER {iteration}] {name} shape={darr.shape}")
-                    # Instead of "return darr, iteration", enables both deisarr and darr+iteration returned values
                     return DeisaArray(dask=darr, t=iteration)
 
             # timeout handling
@@ -354,7 +353,6 @@ class Deisa(IDeisa):
 
         # update sliding window
         d = state[array_name]
-        # d["window"].append(darr)
         d["window"].append(DeisaArray(dask=darr, t=iteration))
         d["changed"] = True
 
