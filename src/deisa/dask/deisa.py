@@ -180,12 +180,12 @@ class Deisa(IDeisa):
             def cb(window, timestep): ...
         """
         def decorator(callback: SupportsSlidingWindow.Callback) -> SupportsSlidingWindow.Callback:
-            resolved = tuple(
+            expanded_callback_args = tuple(
                 (arg, window_size) if isinstance(arg, str) else arg
                 for arg in callback_args
             )
             callback.callback_id = self.register_sliding_window_callbacks(
-                callback, *resolved,
+                callback, *expanded_callback_args,
                 exception_handler=exception_handler,
                 when=when)
             return callback
@@ -216,6 +216,7 @@ class Deisa(IDeisa):
         Args can be plain strings or (name, window_size) tuples, or mixed:
           - "array"                   uses DEFAULT_SLIDING_WINDOW_SIZE
           - ("array", window_size)    explicit per-array window size
+          - mixed forms               either default or explicit, for each element
         """
         if not callback_args:
             raise TypeError(
@@ -303,6 +304,7 @@ class Deisa(IDeisa):
         return callback_id
 
     def unregister_sliding_window_callback(self, callback_id: Callback_id) -> None:
+        # also accept a decorated callback function, which stores its id in .callback_id
         callback_id = getattr(callback_id, 'callback_id', callback_id)
         cb_data = self._callbacks.pop(callback_id, None)
         if cb_data is None:
