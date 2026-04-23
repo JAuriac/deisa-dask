@@ -224,11 +224,12 @@ class TestUsingDaskCluster:
 
         darr = da.from_delayed(dask.delayed(res["f"]), res["shape"], dtype=res["dtype"])
 
-        deisarr = DeisaArray(dask=darr, t=0)
-        assert deisarr.dask.compute().shape == (2, 2)
-        assert deisarr.dask.compute().all() == data.all()
-        assert deisarr.dask.sum().compute() == data.sum()
-        assert deisarr.t == 0
+        darr = DeisaArray(dask=darr, t=0)
+        assert isinstance(darr, DeisaArray)
+        assert darr.dask.compute().shape == (2, 2)
+        assert darr.dask.compute().all() == data.all()
+        assert darr.dask.sum().compute() == data.sum()
+        assert darr.t == 0
 
     @pytest.mark.parametrize('global_grid_size', [(8, 8), (32, 32), (32, 4), (4, 32)])
     @pytest.mark.parametrize('mpi_parallelism', [(1, 1), (2, 2), (1, 2), (2, 1)])
@@ -259,12 +260,12 @@ class TestUsingDaskCluster:
             global_data = sim.generate_data('my_array', iteration=i, update_workers=update_workers)
             global_data_da = da.from_array(global_data, chunks=(global_grid_size[0] // mpi_parallelism[0],
                                                                 global_grid_size[1] // mpi_parallelism[1]))
-            deisarr = deisa.get_array('my_array', iteration=i)
+            darr = deisa.get_array('my_array', iteration=i)
 
-            assert deisarr.t == i, "iteration does not match expected"
-            computed = deisarr.dask.sum().compute()
+            assert isinstance(darr, DeisaArray)
+            assert darr.t == i, "iteration does not match expected"
 
-            assert math.isclose(global_data_da.sum().compute(), computed,
+            assert math.isclose(global_data_da.sum().compute(), darr.dask.sum().compute(),
                                 rel_tol=1e-09), "reconstructed dask array does not match original"
 
     def test_get_dask_array_slow(self, env_setup):
@@ -293,10 +294,11 @@ class TestUsingDaskCluster:
         gc.collect()
         time.sleep(1)
 
-        deisarr = deisa.get_array('my_array', iteration=1)
+        darr = deisa.get_array('my_array', iteration=1)
 
-        assert deisarr.t == 1, "iteration does not match expected"
-        assert dask_array_element_wise_equal(global_data_da, deisarr.dask), "dask arrays are not equal"
+        assert isinstance(darr, DeisaArray)
+        assert darr.t == 1, "iteration does not match expected"
+        assert dask_array_element_wise_equal(global_data_da, darr.dask), "dask arrays are not equal"
 
     @pytest.mark.parametrize('global_grid_size', [(8, 8), (32, 32), (32, 4), (4, 32)])
     @pytest.mark.parametrize('mpi_parallelism', [(1, 1), (2, 2), (1, 2), (2, 1)])
@@ -327,11 +329,10 @@ class TestUsingDaskCluster:
             'counter': 0
         }
 
-        def window_callback(window, timestep: int):
-            print(f"hello from window_callback. iteration={timestep}", flush=True)
+        def window_callback(window: list[DeisaArray]):
+            print(f"hello from window_callback. iteration={window[-1].t}", flush=True)
             context['counter'] += 1
-
-            context['latest_timestep'] = timestep
+            context['latest_timestep'] = window[-1].t
             context['latest_data'] = window[-1].dask
 
             context['latest_window_size'] = len(window)
@@ -409,10 +410,10 @@ class TestUsingDaskCluster:
             'counter': 0
         }
 
-        def window_callback_2(temperatures, pressures, timestep: int):
-            print(f"hello from window_callback_2. iteration={timestep}", flush=True)
+        def window_callback_2(temperatures, pressures):
+            print(f"hello from window_callback_2. iteration={temperatures[-1].t}", flush=True)
             context['counter'] += 1
-            context['latest_timestep'] = timestep
+            context['latest_timestep'] = temperatures[-1].t
             context['latest_temperature'] = temperatures[-1].dask
             context['latest_temperature_window_size'] = len(temperatures)
             context['latest_pressure'] = pressures[-1].dask
@@ -422,25 +423,25 @@ class TestUsingDaskCluster:
             s2 = temperatures[-1].dask.sum().compute()
             assert s1 == s2, "data is not the same"
 
-        def window_callback_3(temperatures, pressures, density, timestep: int):
-            print(f"hello from window_callback_3. iteration={timestep}", flush=True)
-            window_callback_2(temperatures, pressures, timestep)
+        def window_callback_3(temperatures, pressures, density):
+            print(f"hello from window_callback_3. iteration={density[-1].t}", flush=True)
+            window_callback_2(temperatures, pressures, density[-1].t)
             context['latest_density'] = density[-1].dask
             context['latest_density_window_size'] = len(density)
 
             density[-1].dask.sum().compute()
 
         callback_id = deisa.register_sliding_window_callbacks(window_callback_2,
-                                                             ("temperature", temperature_window_size),
-                                                             ("pressure", pressure_window_size),
-                                                             when='AND')
+                                                              ("temperature", temperature_window_size),
+                                                              ("pressure", pressure_window_size),
+                                                              when='AND')
         assert callback_id is not None, "callback was not registered"
 
         callback_id = deisa.register_sliding_window_callbacks(window_callback_3,
-                                                             ("temperature", temperature_window_size),
-                                                             ("pressure", pressure_window_size),
-                                                             ("density", density_window_size),
-                                                             when='AND')
+                                                              ("temperature", temperature_window_size),
+                                                              ("pressure", pressure_window_size),
+                                                              ("density", density_window_size),
+                                                              when='AND')
         assert callback_id is not None, "callback was not registered"
 
         time.sleep(.1)  # wait for callback to be completely registered
@@ -469,8 +470,10 @@ class TestUsingDaskCluster:
             assert wait_for(lambda: context['latest_pressure_window_size'] == min(i, pressure_window_size)), \
                 "callback was not called with correct window size"
 
+            # density
             assert wait_for(lambda: 'latest_density' not in context), "uncorrect callback call"
 
+        # generate density to trigger callback_3
         iteration = nb_iterations + 1
         global_density = sim.generate_data('density', iteration=iteration)
         global_density_da = da.from_array(global_density,
@@ -511,13 +514,11 @@ class TestUsingDaskCluster:
             'counter': 0
         }
 
-        def window_callback(window, timestep: int):
-            print(f"hello from window_callback. iteration={timestep}", flush=True)
+        def window_callback(window: list[DeisaArray]):
+            print(f"hello from window_callback. iteration={window[-1].t}", flush=True)
             context['counter'] += 1
-            context['latest_timestep'] = timestep
-
+            context['latest_timestep'] = window[-1].t
             context['latest_data'] = window[-1].dask
-
             context['latest_window_size'] = len(window)
 
         # register followed by unregister
@@ -565,10 +566,10 @@ class TestUsingDaskCluster:
             'counter': 0
         }
 
-        def window_callback(temperatures, pressures, timestep: int):
-            print(f"hello from window_callback. iteration={timestep}", flush=True)
+        def window_callback(temperatures: list[DeisaArray], pressures: list[DeisaArray]):
+            print(f"hello from window_callback. iteration={temperatures[-1].t}", flush=True)
             context['counter'] += 1
-            context['latest_timestep'] = timestep
+            context['latest_timestep'] = temperatures[-1].t
 
             context['latest_temperatures_data'] = temperatures[-1].dask
             context['latest_pressures_data'] = pressures[-1].dask
@@ -622,8 +623,8 @@ class TestUsingDaskCluster:
             'exception_handler': 0
         }
 
-        def window_callback(_: list[da.Array], timestep: int):
-            print(f"hello from window_callback. iteration={timestep}", flush=True)
+        def window_callback(window: list[DeisaArray]):
+            print(f"hello from window_callback. iteration={window[-1].t}", flush=True)
             context['counter'] += 1
             raise RuntimeError("Throw from user callback")
 
@@ -697,8 +698,8 @@ class TestUsingDaskCluster:
 
         context = {'counter': 0}
 
-        def window_callback(window, timestep: int):
-            print(f"hello from window_callback. iteration={timestep}", flush=True)
+        def window_callback(window):
+            print(f"hello from window_callback. iteration={window[-1].t}", flush=True)
 
             darr = window[-1].dask
 
@@ -768,8 +769,8 @@ class TestUsingDaskCluster:
             'counter': 0
         }
 
-        def window_callback(_: list[da.Array], timestep: int):
-            print(f"hello from window_callback. iteration={timestep}", flush=True)
+        def window_callback(window: list[DeisaArray]):
+            print(f"hello from window_callback. iteration={window[-1].t}", flush=True)
             context['counter'] += 1
             deisa.set('hello', 'world', chunked=False)
 
