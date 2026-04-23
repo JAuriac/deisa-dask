@@ -365,8 +365,7 @@ class Deisa(IDeisa):
                 try:
                     await asyncio.to_thread(
                         cb_data["callback"],
-                        *windows,
-                        timestep=iteration
+                        *windows
                     )
                 except Exception as ex:
                     self._handle_callback_exception(callback_id, cb_data, ex)

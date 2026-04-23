@@ -425,7 +425,7 @@ class TestUsingDaskCluster:
 
         def window_callback_3(temperatures, pressures, density):
             print(f"hello from window_callback_3. iteration={density[-1].t}", flush=True)
-            window_callback_2(temperatures, pressures, density[-1].t)
+            window_callback_2(temperatures, pressures)
             context['latest_density'] = density[-1].dask
             context['latest_density_window_size'] = len(density)
 
