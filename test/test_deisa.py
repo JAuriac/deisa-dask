@@ -327,8 +327,6 @@ class TestUsingDaskCluster:
             context['latest_data'] = window[-1]
             context['latest_window_size'] = len(window)
 
-        _ = window_callback # registered via decorator, to suppress "not accessed" warning
-
         for i in range(1, nb_iterations + 1):
             print(f"iteration {i}", flush=True)
             global_data = sim.generate_data('my_array', iteration=i)

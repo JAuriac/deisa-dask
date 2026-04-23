@@ -180,12 +180,9 @@ class Deisa(IDeisa):
             def cb(window, timestep): ...
         """
         def decorator(callback: SupportsSlidingWindow.Callback) -> SupportsSlidingWindow.Callback:
-            expanded_callback_args = tuple(
-                (arg, window_size) if isinstance(arg, str) else arg
-                for arg in callback_args
-            )
             callback.callback_id = self.register_sliding_window_callbacks(
-                callback, *expanded_callback_args,
+                callback, *callback_args,
+                window_size=window_size,
                 exception_handler=exception_handler,
                 when=when)
             return callback
@@ -206,17 +203,18 @@ class Deisa(IDeisa):
             when='AND')
 
     def register_sliding_window_callbacks(self,
-                                          callback: SupportsSlidingWindow.Callback,
-                                          *callback_args: Callback_args,
-                                          exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
-                                          when: Literal['AND', 'OR'] = 'AND') -> Callback_id:
+                                        callback: SupportsSlidingWindow.Callback,
+                                        *callback_args: Callback_args,
+                                        window_size: int = DEFAULT_SLIDING_WINDOW_SIZE,
+                                        exception_handler: SupportsSlidingWindow.ExceptionHandler = __default_exception_handler,
+                                        when: Literal['AND', 'OR'] = 'AND') -> Callback_id:
         """
         Register a sliding-window callback for one or more arrays.
 
         Args can be plain strings or (name, window_size) tuples, or mixed:
-          - "array"                   uses DEFAULT_SLIDING_WINDOW_SIZE
-          - ("array", window_size)    explicit per-array window size
-          - mixed forms               either default or explicit, for each element
+        - "array"                   uses window_size kwarg as fallback
+        - ("array", window_size)    explicit per-array window size
+        - mixed forms               either default or explicit, for each element
         """
         if not callback_args:
             raise TypeError(
@@ -228,10 +226,10 @@ class Deisa(IDeisa):
 
         for arg in callback_args:
             if isinstance(arg, str):
-                parsed.append((arg, DEFAULT_SLIDING_WINDOW_SIZE))
+                parsed.append((arg, window_size))
             elif isinstance(arg, tuple):
                 if len(arg) == 1:
-                    parsed.append((arg[0], DEFAULT_SLIDING_WINDOW_SIZE))
+                    parsed.append((arg[0], window_size))
                 elif len(arg) == 2:
                     name, ws = arg
                     if not isinstance(name, str) or not isinstance(ws, int):
@@ -303,7 +301,7 @@ class Deisa(IDeisa):
 
         return callback_id
 
-    def unregister_sliding_window_callback(self, callback_id: Callback_id) -> None:
+    def unregister_sliding_window_callback(self, callback_id: Union[Callback_id, SupportsSlidingWindow.Callback]) -> None:
         # also accept a decorated callback function, which stores its id in .callback_id
         callback_id = getattr(callback_id, 'callback_id', callback_id)
         cb_data = self._callbacks.pop(callback_id, None)
