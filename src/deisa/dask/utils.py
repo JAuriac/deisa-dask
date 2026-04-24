@@ -29,6 +29,7 @@
 import logging
 import os
 import sys
+import json
 
 from distributed import Client, Lock, Variable
 
@@ -45,6 +46,12 @@ def get_connection_info(dask_scheduler_address: str | Client) -> Client:
         except ValueError:
             # try scheduler_file
             if os.path.isfile(dask_scheduler_address):
+                with open(dask_scheduler_address) as f:
+                    info = json.load(f)
+                address = info.get("address", "")
+                if not address.startswith(("tcp://")): # also check for tls or inproc ?
+                    raise ValueError(
+                        f"Scheduler file contains invalid address: {address!r}")
                 client = Client(scheduler_file=dask_scheduler_address, heartbeat_interval=f"{sys.maxsize}w")
             else:
                 raise ValueError(
