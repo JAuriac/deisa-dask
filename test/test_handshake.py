@@ -26,15 +26,25 @@ class TestHandshake:
 
     @staticmethod
     def start_deisa_handshake(address: str, nb_bridge: int):
-        client = get_connection_info(address)
-        handshake = Handshake('deisa', client)
-        assert handshake.get_nb_bridges() == nb_bridge
-        assert handshake.get_arrays_metadata() == {'hello': 'world'}
+        try:
+            client = get_connection_info(address)
+            handshake = Handshake('deisa', client)
+            assert handshake.get_nb_bridges() == nb_bridge
+            assert handshake.get_arrays_metadata() == {'hello': 'world'}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise
 
     @staticmethod
     def start_bridge_handshake(address: str, id: int, max: int):
-        client = get_connection_info(address)
-        handshake = Handshake('bridge', client, id=id, max=max, arrays_metadata={'hello': 'world'})
+        try:
+            client = get_connection_info(address)
+            handshake = Handshake('bridge', client, id=id, max=max, arrays_metadata={'hello': 'world'})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise
 
     @staticmethod
     def start_processes(processes: List[Process]):

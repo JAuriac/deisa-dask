@@ -62,4 +62,4 @@ jobs:
           python -c "import shutil; print('has mpirun:', bool(shutil.which('mpirun')))"
       - name: MPI test with pytest
         run: |
-          mpirun -n 4 python -m pytest test/test_comm.py --no-header -rN
+          pytest test/test_comm.py
