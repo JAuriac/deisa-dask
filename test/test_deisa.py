@@ -33,6 +33,8 @@ import os.path
 import sys
 import time
 from typing import List
+import json
+import tempfile
 
 import dask
 import dask.array as da
@@ -50,16 +52,23 @@ logging.basicConfig(level=logging.DEBUG)
 @pytest.mark.xdist_group(name="serial")
 class TestDeisaCtor:
     @pytest.fixture(scope="class")
-    def env_setup_tcp_cluster(self):
+    def env_setup_tcp_cluster(self, tmp_path_factory):
         cluster = LocalCluster(n_workers=1, threads_per_worker=1, processes=True, dashboard_address=None,
-                               host='127.0.0.1', scheduler_port=4242)
+                               host='127.0.0.1', scheduler_port=0)
         client = Client(cluster)
         client.wait_for_workers(1, timeout=20)
-        yield cluster
+
+        # Write scheduler file with the actual dynamic address
+        scheduler_file = tmp_path_factory.mktemp("scheduler") / "test-scheduler.json"
+        scheduler_info = cluster.scheduler_info.copy()
+        scheduler_info["address"] = cluster.scheduler_address
+        scheduler_file.write_text(json.dumps(scheduler_info))
+
+        yield cluster, str(scheduler_file)
         cluster.close()
 
     def test_deisa_ctor_client(self, env_setup_tcp_cluster):
-        cluster = env_setup_tcp_cluster
+        cluster, _ = env_setup_tcp_cluster
         client = Client(cluster)
         deisa = Deisa(get_connection_info=lambda: client, wait_for_go=False)
         assert deisa.client is not None, "Deisa should not be None"
@@ -67,21 +76,21 @@ class TestDeisaCtor:
         deisa.close()
 
     def test_deisa_ctor_str(self, env_setup_tcp_cluster):
-        cluster = env_setup_tcp_cluster
-        deisa = Deisa(get_connection_info=lambda: get_connection_info('tcp://127.0.0.1:4242'),
-                      wait_for_go=False)
-        assert deisa.client is not None, "Deisa should not be None"
-        assert deisa.client.scheduler.address == cluster.scheduler_address, "Client should be the same as scheduler"
+        cluster, _ = env_setup_tcp_cluster
+        deisa = Deisa(get_connection_info=lambda: get_connection_info(cluster.scheduler_address),
+                    wait_for_go=False)
+        assert deisa.client is not None
+        assert deisa.client.scheduler.address == cluster.scheduler_address
         deisa.close()
 
     def test_deisa_ctor_scheduler_file(self, env_setup_tcp_cluster):
-        cluster = env_setup_tcp_cluster
-        f = os.path.abspath(os.path.dirname(__file__)) + os.path.sep + 'test-scheduler.json'
-        deisa = Deisa(get_connection_info=lambda: get_connection_info(f), wait_for_go=False)
+        cluster, scheduler_file = env_setup_tcp_cluster
+        deisa = Deisa(get_connection_info=lambda: get_connection_info(scheduler_file), wait_for_go=False)
         assert deisa.client is not None, "Deisa should not be None"
         assert deisa.client.scheduler.address == cluster.scheduler_address, "Client should be the same as scheduler"
         deisa.close()
 
+    @pytest.mark.timeout(10)
     def test_deisa_ctor_scheduler_file_error(self):
         with pytest.raises(ValueError) as e:
             f = os.path.abspath(os.path.dirname(__file__)) + os.path.sep + 'test-scheduler-error.json'

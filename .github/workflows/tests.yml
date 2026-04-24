@@ -53,6 +53,13 @@ jobs:
           python -m pip install dask==${{ matrix.dask-version }} distributed==${{ matrix.dask-version }}
           python -m pip install .
           python -m pip install .[test,mpi]
+      - name: Verify mpirun is available
+        run: which mpirun && mpirun --version
+      - name: Debug MPI environment
+        run: |
+          which mpirun || echo "mpirun NOT in PATH"
+          mpirun --version
+          python -c "import shutil; print('has mpirun:', bool(shutil.which('mpirun')))"
       - name: MPI test with pytest
         run: |
-          pytest test/test_comm.py
+          mpirun -n 4 python -m pytest test/test_comm.py --no-header -rN

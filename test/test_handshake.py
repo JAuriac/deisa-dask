@@ -7,6 +7,8 @@ from distributed import LocalCluster
 from deisa.dask import get_connection_info
 from deisa.dask.handshake import Handshake
 
+import multiprocessing as mp
+
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -40,10 +42,14 @@ class TestHandshake:
             p.start()
 
     @staticmethod
-    def join_processes(processes: List[Process]):
+    def join_processes(processes: List[Process], timeout=25):
         for p in processes:
-            p.join()
-            assert p.exitcode == 0, "process exited with error"
+            p.join(timeout=timeout)
+            if p.is_alive():
+                p.terminate()
+                p.join()
+                pytest.fail(f"Process {p.name} did not finish within {timeout}s")
+            assert p.exitcode == 0, f"Process {p.name} exited with code {p.exitcode}"
 
     @pytest.mark.parametrize('nb_bridge', [1, 4])
     def test_handshake_deisa_first(self, env_setup, nb_bridge: int):
@@ -51,10 +57,12 @@ class TestHandshake:
         addr = cluster.scheduler.address
         print(f"cluster={cluster}, addr={addr}, nb_bridge={nb_bridge}", flush=True)
 
-        processes: List[Process] = [Process(target=TestHandshake.start_deisa_handshake, args=(addr, nb_bridge))]
+        ctx = mp.get_context('spawn')
+
+        processes: List[Process] = [ctx.Process(target=TestHandshake.start_deisa_handshake, args=(addr, nb_bridge))]
 
         for i in range(nb_bridge):
-            processes.append(Process(target=TestHandshake.start_bridge_handshake, args=(addr, i, nb_bridge)))
+            processes.append(ctx.Process(target=TestHandshake.start_bridge_handshake, args=(addr, i, nb_bridge)))
 
         TestHandshake.start_processes(processes)
         TestHandshake.join_processes(processes)
@@ -65,12 +73,14 @@ class TestHandshake:
         addr = cluster.scheduler.address
         print(f"cluster={cluster}, addr={addr}", flush=True)
 
+        ctx = mp.get_context('spawn')
+
         processes: List[Process] = []
 
         for i in range(nb_bridge):
-            processes.append(Process(target=TestHandshake.start_bridge_handshake, args=(addr, i, nb_bridge)))
+            processes.append(ctx.Process(target=TestHandshake.start_bridge_handshake, args=(addr, i, nb_bridge)))
 
-        processes.append(Process(target=TestHandshake.start_deisa_handshake, args=(addr, nb_bridge)))
+        processes.append(ctx.Process(target=TestHandshake.start_deisa_handshake, args=(addr, nb_bridge)))
 
         TestHandshake.start_processes(processes)
         TestHandshake.join_processes(processes)
