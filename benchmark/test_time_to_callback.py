@@ -40,13 +40,7 @@ import pytest
 # Number of send() -> callback hops performed per benchmark round. Each round
 # launches one mpirun process group and loops this many sends, so the reported
 # latency is averaged over many hops (better statistics than one-per-round).
-N_SENDS = 100
-
-# Global array shape (review requirement): GLOBAL_SHAPE is fixed and each
-# bridge sends its sub-part (chunk) of this global data, partitioned across an
-# MPI Cartesian grid. GLOBAL_SHAPE must be divisible by every Cartesian dim
-# size used (1, 2, 4 bridges -> dims (1,1), (2,1), (2,2)).
-GLOBAL_SHAPE = (128, 128)
+N_SENDS = 2000
 
 
 def _has_mpirun():
@@ -57,7 +51,7 @@ def _is_xdist():
     return "PYTEST_XDIST_WORKER" in os.environ
 
 
-def _mpi_bridge_main(timestep: int, array_name: str, n_sends: int):
+def _mpi_bridge_main(array_name: str, n_sends: int):
     """Run MPI bridge processes for benchmarking.
 
     Performs `n_sends` Bridge.send() calls. The per-hop send timestamp (ns,
@@ -66,26 +60,25 @@ def _mpi_bridge_main(timestep: int, array_name: str, n_sends: int):
     callback latency with NO disk I/O.
     """
     from mpi4py import MPI
+
     from deisa.dask import Bridge
 
     bridge_comm = MPI.COMM_WORLD
     dims = MPI.Compute_dims(bridge_comm.Get_size(), 2)
     bridge_comm = bridge_comm.Create_cart(dims)
-
     rank = bridge_comm.Get_rank()
+    size = bridge_comm.Get_size()
 
-    # GLOBAL_SHAPE is split across the MPI Cartesian grid (dims computed above).
-    # Each bridge owns its sub-part (chunk) of the global data: chunk_shape
-    # divides GLOBAL_SHAPE by the Cartesian dims and chunk_position is this
-    # bridge's coords in the grid.
-    global_shape = GLOBAL_SHAPE
-    chunk_shape = tuple(gs // d for gs, d in zip(GLOBAL_SHAPE, dims))
+    print(f"[{rank}/{size}] Bridge started.", flush=True)
+
+    global_shape = (size, 1)
+    chunk_shape = tuple(gs // d for gs, d in zip(global_shape, dims))
 
     arrays_metadata = {
         array_name: {
-            'global_shape': global_shape,
-            'chunk_shape': chunk_shape,
-            'chunk_position': bridge_comm.Get_coords(rank)
+            "global_shape": global_shape,
+            "chunk_shape": chunk_shape,
+            "chunk_position": bridge_comm.Get_coords(rank),
         }
     }
 
@@ -99,28 +92,34 @@ def _mpi_bridge_main(timestep: int, array_name: str, n_sends: int):
         # lives at element [0, 0]; remaining elements are arbitrary fill.
         data = np.zeros(chunk_shape, dtype=np.int64)
         data[0, 0] = np.int64(time.time_ns())
-        data.flat[1] = np.int64(i)  # hop index, so the callback pairs it
 
-        bridge.send(array_name, data, timestep=timestep + i,
-                    update_workers=False, filter_workers=lambda w: list(w.keys()))
+        bridge.send(array_name, data, timestep=i, update_workers=False, filter_workers=lambda w: list(w.keys()))
 
-    bridge.close(timestep=timestep)
+    bridge.close(timestep=n_sends)
 
 
-def _spawn_mpi(scheduler_address: str, nb_bridges: int,
-               timestep: int, array_name: str, n_sends: int):
+def _spawn_mpi(scheduler_address: str, nb_bridges: int, array_name: str, n_sends: int):
     """Launch the MPI bridge processes (a fresh process group each call)."""
     cmd = [
-        "mpirun", "-n", str(nb_bridges), "--oversubscribe",
-        sys.executable, "-u", __file__,
+        "mpirun",
+        "-n",
+        str(nb_bridges),
+        "--oversubscribe",
+        sys.executable,
+        "-u",
+        __file__,
         "--mpi-bridge",
-        "--scheduler-address", scheduler_address,
-        "--nb-bridges", str(nb_bridges),
-        "--timestep", str(timestep),
-        "--array-name", array_name,
-        "--n-sends", str(n_sends),
+        "--scheduler-address",
+        scheduler_address,
+        "--nb-bridges",
+        str(nb_bridges),
+        "--array-name",
+        array_name,
+        "--n-sends",
+        str(n_sends),
     ]
     return subprocess.run(cmd, timeout=120)
+
 
 @pytest.mark.benchmark
 @pytest.mark.skipif(_is_xdist(), reason="requires serial execution")
@@ -137,10 +136,10 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
     benchmark.extra_info. No timing data is written to disk.
     """
     from distributed import LocalCluster
+
     from deisa.dask import Deisa
 
-    array_name = f"temperature_mpi_{nb_bridges}_{GLOBAL_SHAPE[0]}"
-    timestep = 0
+    array_name = "temperature"
 
     def run_benchmark():
         results = []  # true send -> callback deltas (ns), one per hop
@@ -155,14 +154,10 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
                 # read the int64 send timestamp embedded at element [0, 0].
                 cb_ns = time.time_ns()
                 np_arr = window[0].compute()
-                send_ns = int(np_arr[0, 0])
+                send_ns = int(np.min(np_arr))
                 results.append(cb_ns - send_ns)
 
-            # deisa.register(array_name)(timed_callback)
             deisa.execute_callbacks()
-            # execute_callbacks() returns before the topic handler runs the
-            # callbacks asynchronously; block until all N_SENDS have fired so
-            # the measured results are populated before run_benchmark returns.
 
         thread = threading.Thread(target=deisa_side)
         thread.start()
@@ -170,7 +165,6 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
         result = _spawn_mpi(
             scheduler_address=os.environ["DEISA_DASK_SCHEDULER_ADDRESS"],
             nb_bridges=nb_bridges,
-            timestep=timestep,
             array_name=array_name,
             n_sends=N_SENDS,
         )
@@ -184,17 +178,17 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
         n_workers=1,
         threads_per_worker=1,
         processes=True,
-        host='127.0.0.1',
+        host="127.0.0.1",
         scheduler_port=0,
         dashboard_address=":0",
-        worker_dashboard_address=":0"
+        worker_dashboard_address=":0",
     )
     cluster.wait_for_workers(1, timeout=10)
     os.environ["DEISA_DASK_SCHEDULER_ADDRESS"] = cluster.scheduler.address
 
     results = run_benchmark()
 
-    print(f"len(results)={len(results)}")
+    print(f"\n\n>>>> len(results)={len(results)} \n\n")
 
     cluster.close()
 
@@ -207,22 +201,40 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
     benchmark.pedantic(replay_one_hop, rounds=len(results), iterations=1)
 
     benchmark.extra_info["nb_bridges"] = nb_bridges
-    benchmark.extra_info["global_shape"] = GLOBAL_SHAPE
+    benchmark.extra_info["global_shape"] = (nb_bridges, 1)
     benchmark.extra_info["n_sends_per_round"] = N_SENDS
 
-    avg_ms = np.mean(results) / 1e6
-    median_ms = np.median(results) / 1e6
-    min_ms = np.min(results) / 1e6
-    max_ms = np.max(results) / 1e6
-    std_ms = np.std(results) / 1e6
-    benchmark.extra_info["true_latency_ms"] = {
-        "avg": avg_ms, "median": median_ms, "min": min_ms,
-        "max": max_ms, "std": std_ms, "n": len(results),
-    }
-    print(f"\nsend->callback ({nb_bridges} MPI bridges, {GLOBAL_SHAPE[0]}x{GLOBAL_SHAPE[1]}, "
-          f"{N_SENDS} sends/round): "
-          f"avg={avg_ms:.3f}ms, median={median_ms:.3f}ms, "
-          f"min={min_ms:.3f}ms, max={max_ms:.3f}ms, std={std_ms:.3f}ms (n={len(results)})")
+    if results and len(results) > 0:
+        # Report in milliseconds (true send -> callback latency).
+        avg_ms = np.mean(results) / 1e6
+        median_ms = np.median(results) / 1e6
+        min_ms = np.min(results) / 1e6
+        max_ms = np.max(results) / 1e6
+        std_ms = np.std(results) / 1e6
+        seventyfive = np.quantile(results, 0.75) / 1e6
+        ninty = np.quantile(results, 0.90) / 1e6
+        nintynine = np.quantile(results, 0.99) / 1e6
+        nintyninenine = np.quantile(results, 0.999) / 1e6
+        benchmark.extra_info["true_latency_ms"] = {
+            "avg": avg_ms,
+            "median": median_ms,
+            "min": min_ms,
+            "max": max_ms,
+            "std": std_ms,
+            "75": seventyfive,
+            "90": ninty,
+            "99": nintynine,
+            "99.9": nintyninenine,
+            "n": len(results),
+        }
+        print(
+            f"\nsend->callback ({nb_bridges} MPI bridges, "
+            f"{N_SENDS} sends/round): "
+            f"avg={avg_ms:.3f}ms, median={median_ms:.3f}ms, "
+            f"min={min_ms:.3f}ms, max={max_ms:.3f}ms, std={std_ms:.3f}ms, "
+            f"75={seventyfive}ms, 90={ninty}ms, 99={nintynine}ms, 99.9={nintyninenine}ms, "
+            f"(n={len(results)})"
+        )
 
 
 # ENTRY POINT SWITCH
@@ -233,7 +245,6 @@ if __name__ == "__main__":
 
     parser.add_argument("--scheduler-address")
     parser.add_argument("--nb-bridges", type=int, default=1)
-    parser.add_argument("--timestep", type=int, default=0)
     parser.add_argument("--array-name", default="temperature")
     parser.add_argument("--n-sends", type=int, default=1)
 
@@ -245,11 +256,7 @@ if __name__ == "__main__":
     if args.mpi_bridge:
         try:
             os.environ["DEISA_DASK_SCHEDULER_ADDRESS"] = args.scheduler_address
-            _mpi_bridge_main(
-                timestep=args.timestep,
-                array_name=args.array_name,
-                n_sends=args.n_sends,
-            )
+            _mpi_bridge_main(array_name=args.array_name, n_sends=args.n_sends)
         except Exception as e:
             print(f"[ERROR] {e}", flush=True)
             import traceback
