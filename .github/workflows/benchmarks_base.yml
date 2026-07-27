@@ -50,12 +50,13 @@ jobs:
           print('MPI implementation versions match')
           "
 
+      - uses: bencherdev/bencher@main
       - name: Run and track base branch pytest benchmarks with Bencher
         env:
           MPI_IMPL: openmpi
         run: |
           bencher run \
-          --project deisa-dask-bencher-test \
+          --project deisa-dask-bencher \
           --key "${{ secrets.BENCHER_API_KEY }}" \
           --branch "${{ github.ref_name }}" \
           --testbed ubuntu-latest \
