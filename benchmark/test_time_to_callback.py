@@ -37,6 +37,8 @@ import time
 import numpy as np
 import pytest
 
+import signal
+
 # Number of send() -> callback hops performed per benchmark round. Each round
 # launches one mpirun process group and loops this many sends, so the reported
 # latency is averaged over many hops (better statistics than one-per-round).
@@ -118,7 +120,17 @@ def _spawn_mpi(scheduler_address: str, nb_bridges: int, array_name: str, n_sends
         "--n-sends",
         str(n_sends),
     ]
-    return subprocess.run(cmd, timeout=120)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=120)
+        return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+    except subprocess.TimeoutExpired:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        proc.communicate()
+        raise
 
 
 @pytest.mark.benchmark
