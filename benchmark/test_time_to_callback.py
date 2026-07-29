@@ -60,6 +60,8 @@ def _mpi_bridge_main(array_name: str, n_sends: int):
     callback latency with NO disk I/O.
     """
     from mpi4py import MPI
+    if not MPI.Is_initialized():
+        MPI.Init()
 
     from deisa.dask import Bridge
 
@@ -145,7 +147,7 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
         results = []  # true send -> callback deltas (ns), one per hop
 
         def deisa_side():
-            deisa = Deisa(feedback_queue_size=4096, timeout=60)
+            deisa = Deisa(feedback_queue_size=1024, timeout=60)
 
             @deisa.register(array_name)
             def timed_callback(window):
@@ -198,13 +200,26 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
 
     cluster.close()
 
-    results_iter = iter(results)
+    # results_iter = iter(results)
+
+    # def replay_one_hop():
+    #     delay_ns = next(results_iter)
+    #     time.sleep(delay_ns / 1e9)
+
+    # benchmark.pedantic(replay_one_hop, rounds=len(results), iterations=1)
+
+    import random
+
+    MAX_REPLAY_SAMPLES = 100  # bounded regardless of N_SENDS
+
+    replay_sample = results if len(results) <= MAX_REPLAY_SAMPLES else random.sample(results, MAX_REPLAY_SAMPLES)
+    sample_iter = iter(replay_sample)
 
     def replay_one_hop():
-        delay_ns = next(results_iter)
+        delay_ns = next(sample_iter)
         time.sleep(delay_ns / 1e9)
 
-    benchmark.pedantic(replay_one_hop, rounds=len(results), iterations=1)
+    benchmark.pedantic(replay_one_hop, rounds=len(replay_sample), iterations=1)
 
     benchmark.extra_info["nb_bridges"] = nb_bridges
     benchmark.extra_info["global_shape"] = (nb_bridges, 1)

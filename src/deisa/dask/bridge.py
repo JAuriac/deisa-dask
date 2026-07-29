@@ -51,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 _COMM_NULL: Final[None] = None
 try:
+    import mpi4py
+    mpi4py.rc.initialize = False  # Constants only, no MPI_Init on import.
     from mpi4py import MPI
 
     _UNDEFINED = MPI.UNDEFINED

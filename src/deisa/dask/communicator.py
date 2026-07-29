@@ -50,9 +50,6 @@ def is_mpi_comm(comm):
 
 def is_running_on_mpi():
     try:
-        import mpi4py
-
-        mpi4py.rc.initialize = False
         from mpi4py import MPI
 
         return MPI.Is_initialized()  # and MPI.COMM_WORLD.Get_size() > 1
