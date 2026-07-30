@@ -15,6 +15,7 @@ jobs:
     env:
       UCX_TLS: tcp,self
       FI_PROVIDER: tcp
+      PYTHONOPTIMIZE: 1
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
