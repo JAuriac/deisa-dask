@@ -51,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 _COMM_NULL: Final[None] = None
 try:
+    import mpi4py
+    mpi4py.rc.initialize = False  # Constants only, no MPI_Init on import.
     from mpi4py import MPI
 
     _UNDEFINED = MPI.UNDEFINED
@@ -88,6 +90,9 @@ class Bridge(IBridge):
         - ``:param kwargs:`` Additional keyword arguments for the initialization. Can include
             configuration parameters like timeout used during client setup.
         """
+        from mpi4py import MPI
+        if not MPI.Is_initialized():
+            MPI.Init()
         super().__init__(comm, arrays_metadata, *args, **kwargs)
         self.comm: ICommunicator = comm
         self.id = self.comm.Get_rank()
