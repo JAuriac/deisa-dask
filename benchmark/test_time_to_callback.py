@@ -269,20 +269,18 @@ def test_time_to_callback_mpi(nb_bridges: int, benchmark):
     cluster.wait_for_workers(1, timeout=10)
     os.environ["DEISA_DASK_SCHEDULER_ADDRESS"] = cluster.scheduler.address
 
-    results = run_benchmark()
+    results = benchmark.pedantic(run_benchmark, warmup_rounds=0, rounds=1, iterations=1)
 
     print(f"\n\n>>>> len(results)={len(results)} \n\n")
 
     cluster.close()
 
-    results_iter = iter(results)
-
-    def replay_one_hop():
-        delay_ns = next(results_iter)
-        time.sleep(delay_ns / 1e9)
-
-    benchmark.pedantic(replay_one_hop, rounds=len(results), iterations=1)
-
+    # pytest-benchmark's main column measures the timed phase only (cluster
+    # already up, Deisa thread waiting, mpirun send -> callback hops). The
+    # number we actually care about -- the true send() -> callback latency --
+    # is captured manually inside the callback and surfaced via
+    # benchmark.extra_info so it lands in the machine-readable JSON for CI
+    # regression tracking.
     benchmark.extra_info["nb_bridges"] = nb_bridges
     benchmark.extra_info["global_shape"] = (nb_bridges,)
     benchmark.extra_info["n_sends_per_round"] = N_SENDS
