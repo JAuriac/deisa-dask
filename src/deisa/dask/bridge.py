@@ -37,13 +37,13 @@ from typing import Any, Deque, Dict, Final, Iterator, List, Optional, Union
 
 import numpy as np
 from deisa.core import IBridge, ICommunicator, validate_arrays_metadata
-from distributed import Client, Queue
+from distributed import Client, Event, Queue
 from distributed.protocol import to_serialize
 from distributed.utils_comm import scatter_to_workers
 from tlz import valmap
 
 from dask.tokenize import tokenize
-from deisa.dask.constants import CLIENT_KEY, FEEDBACK_QUEUE_PREFIX, KEY_PREFIX
+from deisa.dask.constants import CLIENT_KEY, FEEDBACK_QUEUE_PREFIX, KEY_PREFIX, WAIT_FOR_EXECUTE_CB_EVENT
 from deisa.dask.handshake import Handshake
 from deisa.dask.utils import get_client
 
@@ -129,6 +129,9 @@ class Bridge(IBridge):
             self.handshake.all_bridges_ready(
                 nb_bridge=self.comm.Get_size(), arrays_metadata=metadata_for_handshake, **kwargs
             )
+
+            if kwargs.get("wait_for_go", True):
+                Event(WAIT_FOR_EXECUTE_CB_EVENT, client=self.client).wait()
 
     def _gather_global_metadata(self):
         """

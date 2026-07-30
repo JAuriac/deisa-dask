@@ -20,6 +20,10 @@ Types of changes:
 
 - CI: continous benchmark using Bencher.
 
+### Fixed
+
+- Missing first callback(s) due to not waiting for `Deisa.execute_callbacks()`
+
 ## [0.6.3]
 
 ### Added
