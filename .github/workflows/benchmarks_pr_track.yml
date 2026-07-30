@@ -16,7 +16,7 @@ jobs:
       actions: read
     runs-on: ubuntu-latest
     env:
-      BENCHMARK_RESULTS: benchmark_results.json
+      BENCHMARK_RESULTS: bencher-result.json
       PR_EVENT: event.json
     steps:
       - name: Download benchmark results
@@ -47,7 +47,7 @@ jobs:
       - name: Track PR benchmarks with Bencher
         run: |
           bencher run \
-          --project deisa-dask-bencher \
+          --project deisa-dask \
           --key "${{ secrets.BENCHER_API_KEY }}" \
           --branch "$PR_HEAD" \
           --hash "$PR_HEAD_SHA" \
@@ -55,9 +55,9 @@ jobs:
           --start-point-hash "$PR_BASE_SHA" \
           --start-point-clone-thresholds \
           --start-point-reset \
-          --testbed ubuntu-latest \
+          --testbed "gh-${RUNNER_OS}-${RUNNER_ARCH}" \
           --error-on-alert \
-          --adapter python_pytest \
+          --adapter json \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
           --ci-number "$PR_NUMBER" \
           --file "$BENCHMARK_RESULTS"

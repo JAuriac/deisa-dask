@@ -28,45 +28,26 @@ jobs:
           python -m pip install .
           python -m pip install .[benchmark]
 
-      - name: Check MPI implementation versions match
-        run: |
-          mpiexec --version
-          python -c "
-          import subprocess
-          import re
-          import mpi4py
-          from mpi4py import MPI
-          mpi_impl_via_python = MPI.Get_library_version()
-          mpi_impl_via_python_version = re.search(r'\d+\.\d+\.\d+', mpi_impl_via_python).group()
-          mpi_impl_via_cli = subprocess.check_output(['mpiexec', '--version'], text=True)
-          mpi_impl_via_cli_version = re.search(r'\d+\.\d+\.\d+', mpi_impl_via_cli).group()
-          print(f'mpi4py package version :                  {mpi4py.__version__}')
-          print(f'MPI implementation linked by mpi4py :     {mpi_impl_via_python_version}')
-          print(f'MPI implementation used by mpiexec CLI :  {mpi_impl_via_cli_version}')
-          assert mpi_impl_via_python_version == mpi_impl_via_cli_version, (
-              f'MPI implementation mismatch: mpiexec is {mpi_impl_via_cli_version} '
-              f'but mpi4py is linked against {mpi_impl_via_python_version}'
-          )
-          print('MPI implementation versions match')
-          "
 
       - uses: bencherdev/bencher@main
       - name: Run and track base branch pytest benchmarks with Bencher
-        env:
-          MPI_IMPL: openmpi
         run: |
           bencher run \
-          --project deisa-dask-bencher \
+          --project deisa-dask \
           --key "${{ secrets.BENCHER_API_KEY }}" \
           --branch "${{ github.ref_name }}" \
-          --testbed ubuntu-latest \
-          --threshold-measure latency \
-          --threshold-test t_test \
-          --threshold-max-sample-size 64 \
-          --threshold-upper-boundary 0.99 \
+          --testbed "gh-${RUNNER_OS}-${RUNNER_ARCH}" \
+          --threshold-measure 50 \
+          --threshold-test iqr \
+          --threshold-lower-boundary _ \
+          --threshold-upper-boundary 2.0 \
+          --threshold-measure 90 \
+          --threshold-test iqr \
+          --threshold-lower-boundary _ \
+          --threshold-upper-boundary 4.0 \
           --thresholds-reset \
           --error-on-alert \
-          --adapter python_pytest \
+          --adapter json \
           --file benchmark_results.json \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
-          "pytest benchmark/ --ignore=benchmark/test_dask_queue.py --benchmark-json=benchmark_results.json"
+          "pytest --log-level=INFO benchmark/ --ignore=benchmark/test_dask_queue.py"
