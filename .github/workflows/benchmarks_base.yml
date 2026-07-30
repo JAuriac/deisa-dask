@@ -1,6 +1,6 @@
 # This workflow runs a pytest benchmark and uploads the results to Bencher.
 # Triggers on push to this repository's main branch, or manually via workflow_dispatch.
-name: Run and track benchmarks for base
+name: Benchmarks on main
 
 on:
   push:
@@ -51,4 +51,4 @@ jobs:
           --adapter json \
           --file benchmark_results.json \
           --github-actions "${{ secrets.GITHUB_TOKEN }}" \
-          "pytest --log-level=INFO benchmark/ --ignore=benchmark/test_dask_queue.py"
+          "pytest --log-cli-level=INFO benchmark/ --ignore=benchmark/test_dask_queue.py"

@@ -1,5 +1,5 @@
 # This workflow removes the benchmark results in Bencher for a PR when it is closed.
-name: Archive closed PR branch
+name: Benchmark archive closed PR
 
 on:
   pull_request_target:

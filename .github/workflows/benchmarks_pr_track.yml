@@ -1,6 +1,6 @@
 # Inputs the artifacts from "Run benchmarks for pull requests", then uploads them to Bencher.
 # Runs from the trusted context of the main repository, even for forks PRs.
-name: Track pull requests benchmarks
+name: Benchmark track pull requests
 
 on:
   workflow_run:

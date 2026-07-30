@@ -1,6 +1,6 @@
 # This workflow runs a pytest benchmark of a PR's head branch whenever the PR targets this repository's main branch,
 # on any modification to it. Works for PRs from forks. Outputs artifacts for benchmarks_pr_track.yml.
-name: Run benchmarks for pull requests
+name: Benchmarks for pull requests
 
 on:
   pull_request:
@@ -32,7 +32,7 @@ jobs:
 
       - name: Run pytest benchmarks
         run: |
-          pytest --log-level=INFO benchmark/ --ignore=benchmark/test_dask_queue.py
+          pytest --log-cli-level=INFO benchmark/ --ignore=benchmark/test_dask_queue.py
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
