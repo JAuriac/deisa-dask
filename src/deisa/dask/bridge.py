@@ -299,9 +299,9 @@ class Bridge(IBridge):
                 if not isinstance(w, str):
                     raise TypeError(f"worker_filter must return a list of strings, got {type(w)}")
         else:
-            workers = list(workers.keys())
+            # Sort worker addresses to guarantee consistent rank ordering across MPI processes
+            workers = sorted(list(workers.keys()))
 
-        workers = sorted(workers)
         # per bridge id and iteration round-robin over the workers
         index = (timestep + self.id) % len(workers)
         workers = [workers[index]]

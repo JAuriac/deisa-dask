@@ -29,6 +29,7 @@
 import asyncio
 import logging
 import os
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -177,3 +178,77 @@ class TestBridge:
             await asyncio.gather(*[asyncio.to_thread(bridge.close, 0) for i, bridge in enumerate(bridges)])
 
         asyncio.run(_bridge_close())
+
+    @staticmethod
+    def compute_target_worker(workers_dict_or_list, rank: int, timestep: int, filter_fn=None) -> str:
+        """Extracts worker selection logic from Bridge.send()."""
+        if filter_fn:
+            workers = filter_fn(workers_dict_or_list)
+        else:
+            workers = list(workers_dict_or_list.keys()) if isinstance(workers_dict_or_list, dict) else workers_dict_or_list
+
+        workers = sorted(workers)
+        index = (timestep + rank) % len(workers)
+        return workers[index]
+
+
+    def test_bridge_worker_round_robin_distribution(self):
+        # Simulated scheduler workers (out of order)
+        mock_workers = {
+            "tcp://10.0.0.3:8786": {},
+            "tcp://10.0.0.1:8786": {},
+            "tcp://10.0.0.2:8786": {},
+        }
+        num_ranks = 3
+
+        # Timestep 0: Rank 0 -> W1, Rank 1 -> W2, Rank 2 -> W3 (No overlap)
+        t0_assignments = [self.compute_target_worker(mock_workers, rank=r, timestep=0) for r in range(num_ranks)]
+        assert t0_assignments == [
+            "tcp://10.0.0.1:8786",
+            "tcp://10.0.0.2:8786",
+            "tcp://10.0.0.3:8786",
+        ]
+        assert len(set(t0_assignments)) == num_ranks, "Data scattered to duplicate workers on same timestep!"
+
+        # Timestep 1: Assignments rotate by 1 position across workers
+        t1_assignments = [self.compute_target_worker(mock_workers, rank=r, timestep=1) for r in range(num_ranks)]
+        assert t1_assignments == [
+            "tcp://10.0.0.2:8786",
+            "tcp://10.0.0.3:8786",
+            "tcp://10.0.0.1:8786",
+        ]
+
+
+    def test_bridge_worker_filtering_consistency(self):
+        mock_workers = {
+            "tcp://10.0.0.1:8786": {},
+            "tcp://10.0.0.2:8786": {},
+            "tcp://10.0.0.3:8786": {},
+        }
+        # Filter only fast workers
+        filter_fn = lambda w: ["tcp://10.0.0.3:8786", "tcp://10.0.0.1:8786"]
+
+        w_rank0 = self.compute_target_worker(mock_workers, rank=0, timestep=0, filter_fn=filter_fn)
+        w_rank1 = self.compute_target_worker(mock_workers, rank=1, timestep=0, filter_fn=filter_fn)
+
+        assert w_rank0 == "tcp://10.0.0.1:8786"
+        assert w_rank1 == "tcp://10.0.0.3:8786"
+
+
+    def test_bridge_send_worker_selection_order(self, env_setup):
+        client, cluster = env_setup
+        bridge, _ = self.get_new_bridge()
+
+        # Mock _better_scatter to inspect the target worker list
+        bridge._better_scatter = MagicMock(return_value={"future": "k", "who_has": {}, "nbytes": {}})
+        
+        # Custom filter with deliberate ordering
+        custom_order = ["tcp://10.0.0.3:8786", "tcp://10.0.0.1:8786"]
+        
+        bridge.send("temperature", np.ones(1), timestep=0, filter_workers=lambda w: custom_order)
+
+        # Inspect the 'workers' kwarg passed to _better_scatter
+        called_workers = bridge._better_scatter.call_args.kwargs["workers"]
+        
+        # If Bridge.send() sorts after filtering, this assert will fail as expected
+        assert called_workers == ["tcp://10.0.0.3:8786"]
